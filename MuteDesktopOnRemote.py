@@ -7,6 +7,7 @@ from comtypes import CLSCTX_ALL
 import sys
 from threading import Thread, Event
 import pythoncom
+import os
 
 
 # Define stop_thread as a threading event
@@ -89,15 +90,39 @@ def on_exit(icon, item):
 
 
 def create_icon():
-    """Load your custom icon file."""
-    return Image.open(r"P:\Apps\Python\Icons\Google-Noto-Emoji-Objects-62790-speaker-high-volume.ico")  # <-- Change this path to your icon file path
+    """Create system tray icon - either custom or generic."""
+    # Path to your custom icon
+    custom_icon_path = r"P:\Apps\Python\Icons\Google-Noto-Emoji-Objects-62790-speaker-high-volume.ico"
+    
+    # Check if the custom icon exists
+    if os.path.exists(custom_icon_path):
+        # Load the custom icon
+        print(f"Using custom icon: {custom_icon_path}")
+        return Image.open(custom_icon_path)
+    else:
+        # Fallback to generic icon
+        print("Custom icon not found, using generic icon.")
+        return create_generic_icon()
+
+
+def create_generic_icon():
+    """Create a simple generic system tray icon."""
+    # Create a basic 16x16 image with a blue square as the icon
+    image = Image.new('RGB', (16, 16), color='blue')
+    pixels = image.load()
+    for x in range(16):
+        pixels[x, 0] = (0, 0, 0)
+        pixels[x, 15] = (0, 0, 0)
+        pixels[0, x] = (0, 0, 0)
+        pixels[15, x] = (0, 0, 0)
+    return image
 
 
 def main():
     global stop_thread
     stop_thread.clear()  # Make sure the event is cleared at the start
     icon = pystray.Icon("RDP Volume Control")
-    icon.icon = create_icon()
+    icon.icon = create_icon()  # Use the create_icon function to get either custom or generic icon
     icon.menu = pystray.Menu(
         pystray.MenuItem("Unmute Now", on_unmute),
         pystray.MenuItem("Exit", on_exit)
