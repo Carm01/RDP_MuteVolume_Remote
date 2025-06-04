@@ -11,6 +11,8 @@ Install the required Python packages using the following commands:
 ```bash
 pip install pywin32 pystray Pillow pycaw comtypes
 pip install pywin32
+pip install pystray pycaw pywin32 pillow winshell
+
 ```
 
 ---
@@ -51,4 +53,11 @@ The `mute_icon.ico` file must be:
 
   ```bash
   pyinstaller --onefile --noconsole --icon="C:\full\path\to\mute_icon.ico" "C:\path\to\MuteDesktopOnRemote.py"
+  ```
+### Startup Location
+
+The start location where the shortcut will be located:
+
+  ```bash
+  %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
   ```
