@@ -8,10 +8,13 @@ import sys
 from threading import Thread, Event
 import pythoncom
 import os
+import winshell
+from win32com.client import Dispatch
 
-
-# Define stop_thread as a threading event
+# Define threading events
 stop_thread = Event()
+startup_enabled = Event()
+
 
 def is_rdp_active():
     """Check if an RDP session is active."""
@@ -24,7 +27,6 @@ def is_rdp_active():
                     session['SessionId'],
                     win32ts.WTSClientName
                 )
-                print(f"Session ID: {session['SessionId']}, Client Name: {client_name}")
                 if client_name:
                     return True
         return False
@@ -66,10 +68,9 @@ def unmute_volume():
 def monitor_rdp(icon):
     """Monitor RDP connections and control volume."""
     was_rdp_active = False
-    while not stop_thread.is_set():  # Check if stop_thread is set
+    while not stop_thread.is_set():
         try:
             rdp_active = is_rdp_active()
-            print(f"RDP Active: {rdp_active}, Was Active: {was_rdp_active}")
             if rdp_active and not was_rdp_active:
                 print("RDP detected, muting volume.")
                 mute_volume()
@@ -83,31 +84,28 @@ def monitor_rdp(icon):
 
 
 def on_exit(icon, item):
-    """Handle exit menu item and ensure volume is unmuted."""
-    stop_thread.set()  # Set the event to stop the thread
-    unmute_volume()  # Unmute before exiting
+    """Handle exit menu item."""
+    stop_thread.set()
+    unmute_volume()
     icon.stop()
 
 
+def on_unmute(icon, item):
+    """Unmute immediately from tray."""
+    unmute_volume()
+
+
 def create_icon():
-    """Create system tray icon - either custom or generic."""
-    # Path to your custom icon
+    """Create system tray icon - either custom or fallback."""
     custom_icon_path = r"P:\Apps\Python\Icons\Google-Noto-Emoji-Objects-62790-speaker-high-volume.ico"
-    
-    # Check if the custom icon exists
     if os.path.exists(custom_icon_path):
-        # Load the custom icon
-        print(f"Using custom icon: {custom_icon_path}")
         return Image.open(custom_icon_path)
     else:
-        # Fallback to generic icon
-        print("Custom icon not found, using generic icon.")
         return create_generic_icon()
 
 
 def create_generic_icon():
-    """Create a simple generic system tray icon."""
-    # Create a basic 16x16 image with a blue square as the icon
+    """Fallback generic icon."""
     image = Image.new('RGB', (16, 16), color='blue')
     pixels = image.load()
     for x in range(16):
@@ -118,23 +116,72 @@ def create_generic_icon():
     return image
 
 
-def main():
-    global stop_thread
-    stop_thread.clear()  # Make sure the event is cleared at the start
-    icon = pystray.Icon("RDP Volume Control")
-    icon.icon = create_icon()  # Use the create_icon function to get either custom or generic icon
-    icon.menu = pystray.Menu(
-        pystray.MenuItem("Unmute Now", on_unmute),
-        pystray.MenuItem("Exit", on_exit)
-    )
+def is_in_startup():
+    """Check if script is in Startup folder."""
+    startup_path = winshell.startup()
+    shortcut_path = os.path.join(startup_path, "RDPVolumeControl.lnk")
+    return os.path.exists(shortcut_path)
+
+
+def toggle_startup(icon, item):
+    """Toggle script autostart."""
+    startup_path = winshell.startup()
+    shortcut_path = os.path.join(startup_path, "RDPVolumeControl.lnk")
+
+    if os.path.exists(shortcut_path):
+        os.remove(shortcut_path)
+        print("Removed from startup.")
+        startup_enabled.clear()
+        stop_thread.set()
+    else:
+        try:
+            target = sys.executable
+            script_path = os.path.abspath(__file__)
+            arguments = f'"{script_path}"'
+            shell = Dispatch('WScript.Shell')
+            shortcut = shell.CreateShortCut(shortcut_path)
+            shortcut.TargetPath = target
+            shortcut.Arguments = arguments
+            shortcut.WorkingDirectory = os.path.dirname(script_path)
+            shortcut.IconLocation = script_path
+            shortcut.save()
+            print("Added to startup.")
+            startup_enabled.set()
+            start_monitor_thread(icon)
+        except Exception as e:
+            print(f"Error adding to startup: {e}")
+
+
+def start_monitor_thread(icon):
+    """Start the RDP monitoring thread."""
+    if stop_thread.is_set():
+        stop_thread.clear()
     monitor_thread = Thread(target=monitor_rdp, args=(icon,))
     monitor_thread.daemon = True
     monitor_thread.start()
+
+
+def main():
+    global stop_thread
+    stop_thread.clear()
+    icon = pystray.Icon("RDP Volume Control")
+    icon.icon = create_icon()
+    icon.menu = pystray.Menu(
+        pystray.MenuItem("Unmute Now", on_unmute),
+        pystray.MenuItem(
+            "Start with Windows",
+            toggle_startup,
+            checked=lambda item: is_in_startup()
+        ),
+        pystray.MenuItem("Exit", on_exit)
+    )
+
+    # Only monitor if already in startup
+    if is_in_startup():
+        startup_enabled.set()
+        start_monitor_thread(icon)
+
     icon.run()
-    
-def on_unmute(icon, item):
-    """Handle unmute menu item."""
-    unmute_volume()
 
 
 if __name__ == "__main__":
