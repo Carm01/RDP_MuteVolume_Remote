@@ -1,4 +1,4 @@
-# Mute Volume onm RDP machine upon Connect ( Windows Only )
+# Mute Volume on RDP machine upon Connect ( Windows Only )
 
 This script, when run on the remote machine (the one you connect to via RDP), mutes the system volume upon connection and keeps it muted until you manually unmute it.
 
