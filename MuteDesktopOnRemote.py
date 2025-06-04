@@ -5,9 +5,12 @@ from PIL import Image
 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 from comtypes import CLSCTX_ALL
 import sys
-from threading import Thread
+from threading import Thread, Event
 import pythoncom
 
+
+# Define stop_thread as a threading event
+stop_thread = Event()
 
 def is_rdp_active():
     """Check if an RDP session is active."""
@@ -62,7 +65,7 @@ def unmute_volume():
 def monitor_rdp(icon):
     """Monitor RDP connections and control volume."""
     was_rdp_active = False
-    while not stop_thread:
+    while not stop_thread.is_set():  # Check if stop_thread is set
         try:
             rdp_active = is_rdp_active()
             print(f"RDP Active: {rdp_active}, Was Active: {was_rdp_active}")
@@ -80,31 +83,19 @@ def monitor_rdp(icon):
 
 def on_exit(icon, item):
     """Handle exit menu item and ensure volume is unmuted."""
-    global stop_thread
-    stop_thread = True
+    stop_thread.set()  # Set the event to stop the thread
     unmute_volume()  # Unmute before exiting
     icon.stop()
 
 
-##def create_icon():
-##    """Create a simple system tray icon."""
-##    image = Image.new('RGB', (16, 16), color='blue')
-##    pixels = image.load()
-##    for x in range(16):
-##        pixels[x, 0] = (0, 0, 0)
-##        pixels[x, 15] = (0, 0, 0)
-##        pixels[0, x] = (0, 0, 0)
-##        pixels[15, x] = (0, 0, 0)
-##    return image
-
 def create_icon():
     """Load your custom icon file."""
-    return Image.open(r"icon.ico")  # <-- Change this path to your icon file path, or un comment the def create_icon():  section above and comment this section for generic one
+    return Image.open(r"P:\Apps\Python\Icons\Google-Noto-Emoji-Objects-62790-speaker-high-volume.ico")  # <-- Change this path to your icon file path
 
 
 def main():
     global stop_thread
-    stop_thread = False
+    stop_thread.clear()  # Make sure the event is cleared at the start
     icon = pystray.Icon("RDP Volume Control")
     icon.icon = create_icon()
     icon.menu = pystray.Menu(
@@ -119,6 +110,7 @@ def main():
 def on_unmute(icon, item):
     """Handle unmute menu item."""
     unmute_volume()
+
 
 if __name__ == "__main__":
     main()
