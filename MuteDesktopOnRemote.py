@@ -10,14 +10,20 @@ import pythoncom
 import os
 import winshell
 from win32com.client import Dispatch
+import io
+import base64
 
 # Define threading events
 stop_thread = Event()
 startup_enabled = Event()
 
+# === EMBEDDED ICON (base64) ===
+embedded_icon_base64 = """
+<YOUR_BASE64_ICON_STRING_HERE>
+"""  # Replace this with your actual base64-encoded .ico content
+
 
 def is_rdp_active():
-    """Check if an RDP session is active."""
     try:
         sessions = win32ts.WTSEnumerateSessions(win32ts.WTS_CURRENT_SERVER_HANDLE)
         for session in sessions:
@@ -36,7 +42,6 @@ def is_rdp_active():
 
 
 def mute_volume():
-    """Mute the master volume."""
     pythoncom.CoInitialize()
     try:
         devices = AudioUtilities.GetSpeakers()
@@ -51,7 +56,6 @@ def mute_volume():
 
 
 def unmute_volume():
-    """Unmute the master volume."""
     pythoncom.CoInitialize()
     try:
         devices = AudioUtilities.GetSpeakers()
@@ -66,7 +70,6 @@ def unmute_volume():
 
 
 def monitor_rdp(icon):
-    """Monitor RDP connections and control volume."""
     was_rdp_active = False
     while not stop_thread.is_set():
         try:
@@ -84,28 +87,25 @@ def monitor_rdp(icon):
 
 
 def on_exit(icon, item):
-    """Handle exit menu item."""
     stop_thread.set()
     unmute_volume()
     icon.stop()
 
 
 def on_unmute(icon, item):
-    """Unmute immediately from tray."""
     unmute_volume()
 
 
 def create_icon():
-    """Create system tray icon - either custom or fallback."""
-    custom_icon_path = r"P:\Apps\Python\Icons\Google-Noto-Emoji-Objects-62790-speaker-high-volume.ico"
-    if os.path.exists(custom_icon_path):
-        return Image.open(custom_icon_path)
-    else:
+    try:
+        icon_bytes = base64.b64decode(embedded_icon_base64)
+        return Image.open(io.BytesIO(icon_bytes))
+    except Exception as e:
+        print(f"Failed to load embedded icon: {e}")
         return create_generic_icon()
 
 
 def create_generic_icon():
-    """Fallback generic icon."""
     image = Image.new('RGB', (16, 16), color='blue')
     pixels = image.load()
     for x in range(16):
@@ -117,14 +117,12 @@ def create_generic_icon():
 
 
 def is_in_startup():
-    """Check if script is in Startup folder."""
     startup_path = winshell.startup()
     shortcut_path = os.path.join(startup_path, "RDPVolumeControl.lnk")
     return os.path.exists(shortcut_path)
 
 
 def toggle_startup(icon, item):
-    """Toggle script autostart."""
     startup_path = winshell.startup()
     shortcut_path = os.path.join(startup_path, "RDPVolumeControl.lnk")
 
@@ -135,15 +133,20 @@ def toggle_startup(icon, item):
         stop_thread.set()
     else:
         try:
-            target = sys.executable
-            script_path = os.path.abspath(__file__)
-            arguments = f'"{script_path}"'
+            if getattr(sys, 'frozen', False):
+                target = sys.executable
+                arguments = ''
+            else:
+                target = sys.executable
+                script_path = os.path.abspath(__file__)
+                arguments = f'"{script_path}"'
+
             shell = Dispatch('WScript.Shell')
             shortcut = shell.CreateShortCut(shortcut_path)
             shortcut.TargetPath = target
             shortcut.Arguments = arguments
-            shortcut.WorkingDirectory = os.path.dirname(script_path)
-            shortcut.IconLocation = script_path
+            shortcut.WorkingDirectory = os.path.dirname(target)
+            shortcut.IconLocation = target
             shortcut.save()
             print("Added to startup.")
             startup_enabled.set()
@@ -153,7 +156,6 @@ def toggle_startup(icon, item):
 
 
 def start_monitor_thread(icon):
-    """Start the RDP monitoring thread."""
     if stop_thread.is_set():
         stop_thread.clear()
     monitor_thread = Thread(target=monitor_rdp, args=(icon,))
@@ -176,7 +178,6 @@ def main():
         pystray.MenuItem("Exit", on_exit)
     )
 
-    # Only monitor if already in startup
     if is_in_startup():
         startup_enabled.set()
         start_monitor_thread(icon)
