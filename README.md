@@ -61,3 +61,24 @@ The start location where the shortcut will be located:
   ```bash
   %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
   ```
+
+### Important note regarding system tray icon
+
+A generic icon will be used of a blue square in the system tray unless you convert an icon to base64 using the following pyton code:
+
+  ```bash
+  import base64
+
+with open(r"C:\locationt\to\your\icon.ico", "rb") as f:
+    encoded = base64.b64encode(f.read()).decode("utf-8")
+    print(encoded)
+
+  ```
+✅ What to Replace
+
+Replace this line:
+```python
+<YOUR_BASE64_ICON_STRING_HERE>
+```
+With the actual base64 string of your .ico file.
+Make sure the string is wrapped inside triple quotes (""") as shown, or use line breaks (\n) if it's long.
